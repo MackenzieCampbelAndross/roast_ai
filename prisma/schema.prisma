@@ -1,0 +1,100 @@
+// Prisma schema for Roast.ai (AI Powered Comedy Generator)
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum RoastIntensity {
+  MILD
+  MEDIUM
+  SPICY
+  SCORCHED_EARTH
+}
+
+enum InputType {
+  TEXT
+  IMAGE
+}
+
+enum SafetyStatus {
+  PASSED
+  FLAGGED
+  BLOCKED
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String?       @unique
+  isGuest      Boolean       @default(true)
+  dailyQuota   Int           @default(10)
+  quotaUsed    Int           @default(0)
+  lastResetAt  DateTime      @default(now())
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  roasts       Roast[]
+  battles      RoastBattle[]
+  safetyAudits SafetyAudit[]
+}
+
+model Roast {
+  id            String         @id @default(uuid())
+  userId        String?
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  inputType     InputType      @default(TEXT)
+  inputText     String?        @db.Text
+  imageUrl      String?
+  personalityId String
+  intensity     RoastIntensity @default(MEDIUM)
+  roastContent  String         @db.Text
+  alternatives  String[]       // Array of alternative punchlines
+  safetyScore   Float          @default(1.0)
+  promptTokens  Int            @default(0)
+  outputTokens  Int            @default(0)
+  costUSD       Decimal        @default(0.000) @db.Decimal(10, 5)
+  isFavorite    Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+
+  battleParticipations BattleParticipant[]
+
+  @@index([userId, createdAt])
+}
+
+model RoastBattle {
+  id              String   @id @default(uuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  title           String   @default("Head-to-Head Roast Battle")
+  topicOrContext  String?
+  winnerSide      String   // "A" or "B" or "DRAW"
+  judgeVerdict    String   @db.Text
+  createdAt       DateTime @default(now())
+
+  participants    BattleParticipant[]
+}
+
+model BattleParticipant {
+  id          String      @id @default(uuid())
+  battleId    String
+  battle      RoastBattle @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  roastId     String
+  roast       Roast       @relation(fields: [roastId], references: [id], onDelete: Cascade)
+  side        String      // "A" or "B"
+  displayName String
+  score       Float       @default(0.0)
+}
+
+model SafetyAudit {
+  id              String       @id @default(uuid())
+  userId          String?
+  user            User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  stage           String       // "INPUT" or "OUTPUT"
+  contentSnippet  String       @db.VarChar(255)
+  status          SafetyStatus @default(PASSED)
+  violationReason String?
+  detectedAt      DateTime     @default(now())
+}
